@@ -1,5 +1,5 @@
 -- SCRIPT BOT MOBILE - Versão Final Completa
--- Aimbot + ESP + Ir até Inimigo + Puxar Inimigo
+-- Aimbot + ESP + Ir até Inimigo + Puxar + Imortal + Invisível
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -30,9 +30,8 @@ local ESPColor = Color3.fromRGB(255, 80, 80)
 local FOVColor = Color3.fromRGB(80, 130, 255)
 local FOVCircle = nil
 local ESPObjects = {}
-local TeleportToEnemy = false
-local PullEnemy = false
-local PullStrength = 50
+local ImmortalEnabled = false
+local InvisibleEnabled = false
 
 -- Criar ScreenGui
 local ScreenGui = Instance.new("ScreenGui")
@@ -43,6 +42,108 @@ ScreenGui.IgnoreGuiInset = true
 ScreenGui.Parent = LP.PlayerGui
 
 print("✅ GUI CRIADA")
+
+-- ===== FUNÇÃO IMORTAL =====
+local function SetImmortal(enabled)
+    ImmortalEnabled = enabled
+    
+    if enabled then
+        -- Conectar ao evento de dano
+        local function protectCharacter(character)
+            local humanoid = character:FindFirstChild("Humanoid")
+            if humanoid then
+                -- Método 1: Regenerar vida rapidamente
+                humanoid:GetPropertyChangedSignal("Health"):Connect(function()
+                    if ImmortalEnabled and humanoid.Health < humanoid.MaxHealth then
+                        humanoid.Health = humanoid.MaxHealth
+                    end
+                end)
+            end
+            
+            -- Método 2: Proteger partes do corpo
+            for _, part in pairs(character:GetChildren()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = false
+                end
+            end
+        end
+        
+        -- Proteger personagem atual
+        if LP.Character then
+            protectCharacter(LP.Character)
+        end
+        
+        -- Proteger futuros personagens
+        LP.CharacterAdded:Connect(protectCharacter)
+        
+        Notify("🛡️ Imortal Ativado!")
+    else
+        -- Restaurar colisão
+        if LP.Character then
+            for _, part in pairs(LP.Character:GetChildren()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = true
+                end
+            end
+        end
+        Notify("🛡️ Imortal Desativado!")
+    end
+end
+
+-- ===== FUNÇÃO INVISÍVEL =====
+local function SetInvisible(enabled)
+    InvisibleEnabled = enabled
+    
+    local function toggleInvisibility(character)
+        if not character then return end
+        
+        for _, part in pairs(character:GetChildren()) do
+            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                part.Transparency = enabled and 1 or 0
+            end
+        end
+        
+        -- Tornar HumanoidRootPart ligeiramente visível para não bugar
+        local root = character:FindFirstChild("HumanoidRootPart")
+        if root then
+            root.Transparency = enabled and 0.9 or 0
+        end
+        
+        -- Esconder acessórios
+        for _, child in pairs(character:GetDescendants()) do
+            if child:IsA("BasePart") and child.Parent and child.Parent:IsA("Accessory") then
+                child.Transparency = enabled and 1 or 0
+            end
+        end
+        
+        -- Esconder nome
+        local head = character:FindFirstChild("Head")
+        if head then
+            local billboard = head:FindFirstChild("BillboardGui")
+            if billboard then
+                billboard.Enabled = not enabled
+            end
+        end
+    end
+    
+    if enabled then
+        if LP.Character then
+            toggleInvisibility(LP.Character)
+        end
+        
+        LP.CharacterAdded:Connect(function(char)
+            task.wait(0.1)
+            toggleInvisibility(char)
+        end)
+        
+        Notify("👻 Invisível Ativado!")
+    else
+        if LP.Character then
+            toggleInvisibility(LP.Character)
+        end
+        Notify("👻 Invisível Desativado!")
+    end
+end
 
 -- Função para verificar inimigos
 local function IsEnemy(player)
@@ -102,7 +203,6 @@ local function TeleportToTarget()
     local targetPos = target.Character.HumanoidRootPart.Position
     local myRoot = LP.Character.HumanoidRootPart
     
-    -- Teleportar para perto do inimigo (3 studs de distância)
     local direction = (myRoot.Position - targetPos).Unit
     local newPos = targetPos + direction * 3
     
@@ -131,13 +231,11 @@ local function PullTarget()
     local myPos = LP.Character.HumanoidRootPart.Position
     local targetRoot = target.Character.HumanoidRootPart
     
-    -- Puxar o inimigo para perto do jogador
     local direction = (myPos - targetRoot.Position).Unit
     local newPos = myPos - direction * 2
     
     targetRoot.CFrame = CFrame.new(newPos)
     
-    -- Aplicar força extra se tiver Humanoid
     local targetHumanoid = target.Character:FindFirstChild("Humanoid")
     if targetHumanoid then
         targetHumanoid.Sit = true
@@ -187,7 +285,6 @@ local function Notify(text)
     label.TextSize = 13
     label.ZIndex = 1000
     
-    -- Animação
     frame.Position = UDim2.new(0.5, 0, -0.1, 0)
     TweenService:Create(frame, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
         Position = UDim2.new(0.5, 0, 0.1, 0)
@@ -428,7 +525,6 @@ local function AddToggle(tabName, text, default, callback)
     end)
 end
 
--- Botão de ação
 local function AddButton(tabName, text, color, callback)
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(0.92, 0, 0, 42)
@@ -697,346 +793,6 @@ AddToggle("Combate", "Aimbot (Apenas Inimigos)", false, function(val)
     end
 end)
 
-AddSection("Combate", "⚡ MOVIMENTO (1 Inimigo)")
+AddSection("Combate", "⚡ MOVIMENTO")
 
 AddButton("Combate", "🏃 IR ATÉ O INIMIGO", Color3.fromRGB(60, 140, 60), function()
-    TeleportToTarget()
-end)
-
-AddButton("Combate", "🧲 PUXAR INIMIGO", Color3.fromRGB(140, 60, 140), function()
-    PullTarget()
-end)
-
-AddPadding("Combate")
-
--- ============ ABA VISUAL ============
-AddSection("Visual", "👁 ESP")
-
-AddToggle("Visual", "ESP (Ativar/Desativar)", false, function(val)
-    ESPEnabled = val
-    if val then
-        Notify("👁 ESP Ativado")
-    else
-        Notify("👁 ESP Desativado")
-        for _, obj in pairs(ESPObjects) do
-            if obj and obj.Frame then obj.Frame:Destroy() end
-        end
-        ESPObjects = {}
-    end
-end)
-
-AddSection("Visual", "📦 ELEMENTOS DO ESP")
-
-AddToggle("Visual", "Caixa (Box ESP)", true, function(val)
-    ESPBox = val
-    for _, data in pairs(ESPObjects) do
-        if data.Box then data.Box.Visible = val end
-    end
-end)
-
-AddToggle("Visual", "Nome do Jogador", true, function(val)
-    ESPName = val
-    for _, data in pairs(ESPObjects) do
-        if data.NameTag then data.NameTag.Visible = val end
-    end
-end)
-
-AddToggle("Visual", "Distância", true, function(val)
-    ESPDistance = val
-    for _, data in pairs(ESPObjects) do
-        if data.DistTag then data.DistTag.Visible = val end
-    end
-end)
-
-AddToggle("Visual", "Linha (Tracer)", true, function(val)
-    ESPTracer = val
-    for _, data in pairs(ESPObjects) do
-        if data.Tracer then data.Tracer.Visible = val end
-    end
-end)
-
-AddSection("Visual", "🎨 CORES")
-
-AddColorPicker("Visual", "Cor do ESP", ESPColor, function(color)
-    ESPColor = color
-    for _, data in pairs(ESPObjects) do
-        if data.Box and data.Box:FindFirstChild("UIStroke") then data.Box.UIStroke.Color = color end
-        if data.NameTag then data.NameTag.TextColor3 = color end
-        if data.DistTag then data.DistTag.TextColor3 = color end
-        if data.Tracer then data.Tracer.BackgroundColor3 = color end
-    end
-end)
-
-AddPadding("Visual")
-
--- ============ ABA AJUSTES ============
-AddSection("Ajustes", "🎯 AIMBOT")
-
-AddSlider("Ajustes", "Tamanho do FOV", 50, 300, FOVRadius, function(val)
-    FOVRadius = val
-    if FOVCircle then FOVCircle.Size = UDim2.new(0, val * 2, 0, val * 2) end
-end)
-
-AddSlider("Ajustes", "Suavidade", 1, 15, Smoothness, function(val)
-    Smoothness = val
-end)
-
-AddDropdown("Ajustes", "Hit Part", {"Head", "HumanoidRootPart", "Torso"}, "Head", function(val)
-    HitPart = val
-    Notify("🎯 Hit Part: " .. val)
-end)
-
-AddSection("Ajustes", "🛡️ SEGURANÇA")
-
-AddToggle("Ajustes", "Team Check", false, function(val)
-    TeamCheck = val
-    Notify(val and "🛡️ Team Check Ativado" or "🛡️ Team Check Desativado")
-end)
-
-AddToggle("Ajustes", "Wall Check", false, function(val)
-    WallcheckEnabled = val
-    Notify(val and "🧱 Wall Check Ativado" or "🧱 Wall Check Desativado")
-end)
-
-AddSection("Ajustes", "🎨 CORES")
-
-AddColorPicker("Ajustes", "Cor do FOV Circle", FOVColor, function(color)
-    FOVColor = color
-    if FOVCircle and FOVCircle:FindFirstChild("UIStroke") then 
-        FOVCircle.UIStroke.Color = color 
-    end
-end)
-
-AddPadding("Ajustes")
-
--- Ajustar CanvasSize
-for tabName, tabData in pairs(TabContents) do
-    tabData.List:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        tabData.Frame.CanvasSize = UDim2.new(0, 0, 0, tabData.List.AbsoluteContentSize.Y + 10)
-    end)
-end
-
-print("✅ CONTEÚDO ADICIONADO")
-
--- ===== ABRIR/FECHAR =====
-OpenBtn.MouseButton1Click:Connect(function()
-    Main.Visible = true
-    Main.Size = UDim2.new(0, 0, 0, 0)
-    Main.Position = UDim2.new(0.5, 0, 0.5, 0)
-    Main.AnchorPoint = Vector2.new(0.5, 0.5)
-    
-    TweenService:Create(Main, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-        Size = UDim2.new(0.92, 0, 0.75, 0)
-    }):Play()
-    TweenService:Create(Main, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-        Position = UDim2.new(0.5, 0, 0.5, 0)
-    }):Play()
-end)
-
-CloseBtn.MouseButton1Click:Connect(function()
-    TweenService:Create(Main, TweenInfo.new(0.2), {
-        Size = UDim2.new(0, 0, 0, 0)
-    }):Play()
-    task.wait(0.2)
-    Main.Visible = false
-end)
-
--- Drag
-local dragging = false
-local dragStart = nil
-local startPos = nil
-
-Header.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = Main.Position
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if dragging then
-        local delta = input.Position - dragStart
-        Main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-    end
-end)
-
-UserInputService.InputEnded:Connect(function(input)
-    dragging = false
-end)
-
-print("✅ CONTROLES CONFIGURADOS")
-
--- ===== AIMBOT =====
-RunService.RenderStepped:Connect(function()
-    if not AimbotEnabled then return end
-    if not LP.Character or not LP.Character:FindFirstChild("HumanoidRootPart") then return end
-    
-    local closest, dist = nil, math.huge
-    for _, p in pairs(Players:GetPlayers()) do
-        if IsEnemy(p) and p.Character then
-            local target = GetHitPart(p.Character)
-            if target then
-                local pos, visible = Camera:WorldToViewportPoint(target.Position)
-                if visible then
-                    if WallcheckEnabled then
-                        local ray = Ray.new(Camera.CFrame.Position, (target.Position - Camera.CFrame.Position).Unit * 500)
-                        local hit = workspace:FindPartOnRay(ray, LP.Character)
-                        if not hit or not hit:IsDescendantOf(p.Character) then visible = false end
-                    end
-                    if visible then
-                        local d = (Vector2.new(pos.X, pos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
-                        if d < FOVRadius and d < dist then
-                            closest = target
-                            dist = d
-                        end
-                    end
-                end
-            end
-        end
-    end
-    if closest then
-        Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, closest.Position), 1 / Smoothness)
-    end
-end)
-
--- ===== ESP =====
-local function CreateESP(player)
-    if ESPObjects[player] then return end
-    
-    local f = Instance.new("Frame")
-    f.BackgroundTransparency = 1
-    f.BorderSizePixel = 0
-    f.ZIndex = 30
-    f.Parent = ScreenGui
-    
-    local box = Instance.new("Frame", f)
-    box.Size = UDim2.new(1, 0, 1, 0)
-    box.BackgroundTransparency = 1
-    box.BorderSizePixel = 0
-    box.Visible = ESPBox
-    box.ZIndex = 30
-    Instance.new("UIStroke", box).Color = ESPColor
-    
-    local nameTag = Instance.new("TextLabel", f)
-    nameTag.Size = UDim2.new(1, 0, 0, 18)
-    nameTag.Position = UDim2.new(0, 0, 0, -22)
-    nameTag.BackgroundTransparency = 1
-    nameTag.Text = player.Name
-    nameTag.TextColor3 = ESPColor
-    nameTag.Font = Enum.Font.GothamBold
-    nameTag.TextSize = 11
-    nameTag.Visible = ESPName
-    nameTag.TextStrokeTransparency = 0.5
-    nameTag.ZIndex = 31
-    
-    local distTag = Instance.new("TextLabel", f)
-    distTag.Size = UDim2.new(1, 0, 0, 18)
-    distTag.Position = UDim2.new(0, 0, 1, 4)
-    distTag.BackgroundTransparency = 1
-    distTag.Text = "0m"
-    distTag.TextColor3 = ESPColor
-    distTag.Font = Enum.Font.GothamSemibold
-    distTag.TextSize = 10
-    distTag.Visible = ESPDistance
-    distTag.TextStrokeTransparency = 0.5
-    distTag.ZIndex = 31
-    
-    local tracer = Instance.new("Frame", f)
-    tracer.Size = UDim2.new(0, 1, 0, 100)
-    tracer.BackgroundColor3 = ESPColor
-    tracer.BorderSizePixel = 0
-    tracer.Visible = ESPTracer
-    tracer.ZIndex = 29
-    tracer.AnchorPoint = Vector2.new(0.5, 0)
-    tracer.Position = UDim2.new(0.5, 0, 0, 0)
-    
-    ESPObjects[player] = {
-        Frame = f,
-        Box = box,
-        NameTag = nameTag,
-        DistTag = distTag,
-        Tracer = tracer
-    }
-end
-
-local function UpdateESP()
-    if not ESPEnabled then return end
-    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-    
-    for player, data in pairs(ESPObjects) do
-        if player and player.Parent and player.Character then
-            if IsEnemy(player) then
-                local root = player.Character:FindFirstChild("HumanoidRootPart")
-                local head = player.Character:FindFirstChild("Head")
-                if root and head then
-                    local rp, ro = Camera:WorldToViewportPoint(root.Position)
-                    local hp, ho = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0))
-                    if ro and ho then
-                        local h = math.abs(rp.Y - hp.Y) * 1.7
-                        local w = h * 0.6
-                        data.Frame.Visible = true
-                        data.Frame.Position = UDim2.new(0, hp.X - w/2, 0, hp.Y)
-                        data.Frame.Size = UDim2.new(0, w, 0, h)
-                        
-                        if ESPTracer then
-                            local bottomX = hp.X
-                            local bottomY = hp.Y + h
-                            local tracerHeight = center.Y - bottomY
-                            data.Tracer.Size = UDim2.new(0, 1, 0, math.abs(tracerHeight))
-                            data.Tracer.Position = UDim2.new(0.5, 0, 0, -tracerHeight)
-                            data.Tracer.Rotation = math.deg(math.atan2(center.X - bottomX, tracerHeight))
-                        end
-                        
-                        if LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") then
-                            local d = (LP.Character.HumanoidRootPart.Position - root.Position).Magnitude
-                            data.DistTag.Text = string.format("%.0f m", d)
-                        end
-                    else
-                        data.Frame.Visible = false
-                    end
-                end
-            else
-                data.Frame.Visible = false
-            end
-        end
-    end
-end
-
-RunService.RenderStepped:Connect(function()
-    if ESPEnabled then
-        UpdateESP()
-        for _, p in pairs(Players:GetPlayers()) do
-            if p ~= LP and p.Character and IsEnemy(p) and not ESPObjects[p] then
-                CreateESP(p)
-            end
-        end
-        for p, _ in pairs(ESPObjects) do
-            if not p.Parent then
-                ESPObjects[p].Frame:Destroy()
-                ESPObjects[p] = nil
-            end
-        end
-    end
-end)
-
-Players.PlayerAdded:Connect(function(p)
-    p.CharacterAdded:Connect(function()
-        if ESPEnabled and IsEnemy(p) then
-            task.wait(0.3)
-            CreateESP(p)
-        end
-    end)
-end)
-
-Players.PlayerRemoving:Connect(function(p)
-    if ESPObjects[p] then
-        ESPObjects[p].Frame:Destroy()
-        ESPObjects[p] = nil
-    end
-end)
-
--- ===== FINALIZAÇÃO =====
-print("✅✅✅ SCRIPT CARREGADO COM SUCESSO! ✅✅✅")
-print("🎯 Aimbot + 👁 ESP + 🏃 Ir até Inimigo + 🧲 Puxar Inimigo")
-Notify("✅ SCRIPT BOT CARREGADO!")
