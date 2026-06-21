@@ -697,4 +697,62 @@ local function CreateESP(player)
     tr.ZIndex = 29
     tr.AnchorPoint = Vector2.new(0.5, 0)
     
-    ESPObjects[player] = {Frame
+    ESPObjects[player] = {Frame = f, Box = box, NameTag = nm, DistTag = dst, Tracer = tr}
+end
+
+local function UpdateESP()
+    if not ESPEnabled then return end
+    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+    for player, data in pairs(ESPObjects) do
+        if player and player.Parent and player.Character and IsEnemy(player) then
+            local root = player.Character:FindFirstChild("HumanoidRootPart")
+            local head = player.Character:FindFirstChild("Head")
+            if root and head then
+                local rp, ro = Camera:WorldToViewportPoint(root.Position)
+                local hp, ho = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0))
+                if ro and ho then
+                    local h = math.abs(rp.Y - hp.Y) * 1.7
+                    local w = h * 0.6
+                    data.Frame.Visible = true
+                    data.Frame.Position = UDim2.new(0, hp.X - w/2, 0, hp.Y)
+                    data.Frame.Size = UDim2.new(0, w, 0, h)
+                    if ESPTracer then
+                        local bx, by = hp.X, hp.Y + h
+                        local th = center.Y - by
+                        data.Tracer.Size = UDim2.new(0, 1, 0, math.abs(th))
+                        data.Tracer.Position = UDim2.new(0.5, 0, 0, -th)
+                        data.Tracer.Rotation = math.deg(math.atan2(center.X - bx, th))
+                    end
+                    if LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") then
+                        data.DistTag.Text = string.format("%.0f m", (LP.Character.HumanoidRootPart.Position - root.Position).Magnitude)
+                    end
+                else data.Frame.Visible = false end
+            end
+        elseif data.Frame then data.Frame.Visible = false end
+    end
+end
+
+RunService.RenderStepped:Connect(function()
+    if ESPEnabled then
+        UpdateESP()
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= LP and p.Character and IsEnemy(p) and not ESPObjects[p] then CreateESP(p) end
+        end
+        for p, _ in pairs(ESPObjects) do
+            if not p.Parent then ESPObjects[p].Frame:Destroy(); ESPObjects[p] = nil end
+        end
+    end
+end)
+
+Players.PlayerAdded:Connect(function(p)
+    p.CharacterAdded:Connect(function()
+        if ESPEnabled and IsEnemy(p) then task.wait(0.3); CreateESP(p) end
+    end)
+end)
+Players.PlayerRemoving:Connect(function(p)
+    if ESPObjects[p] then ESPObjects[p].Frame:Destroy(); ESPObjects[p] = nil end
+end)
+
+-- ===== FIM =====
+print("✅✅✅ SCRIPT CARREGADO! ✅✅✅")
+Notify("✅ SCRIPT BOT CARREGADO!")
