@@ -1,5 +1,5 @@
--- SCRIPT BOT MOBILE - Versão Final Completa
--- Aimbot + ESP + Ir até Inimigo + Puxar + Imortal + Invisível
+-- SCRIPT BOT MOBILE - Versão Final
+-- Aimbot + ESP + Ir até Inimigo + Puxar Inimigo + Esconder FOV
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -30,8 +30,7 @@ local ESPColor = Color3.fromRGB(255, 80, 80)
 local FOVColor = Color3.fromRGB(80, 130, 255)
 local FOVCircle = nil
 local ESPObjects = {}
-local ImmortalEnabled = false
-local InvisibleEnabled = false
+local FOVVisible = true -- Nova variável para controle de visibilidade do FOV
 
 -- Criar ScreenGui
 local ScreenGui = Instance.new("ScreenGui")
@@ -42,108 +41,6 @@ ScreenGui.IgnoreGuiInset = true
 ScreenGui.Parent = LP.PlayerGui
 
 print("✅ GUI CRIADA")
-
--- ===== FUNÇÃO IMORTAL =====
-local function SetImmortal(enabled)
-    ImmortalEnabled = enabled
-    
-    if enabled then
-        -- Conectar ao evento de dano
-        local function protectCharacter(character)
-            local humanoid = character:FindFirstChild("Humanoid")
-            if humanoid then
-                -- Método 1: Regenerar vida rapidamente
-                humanoid:GetPropertyChangedSignal("Health"):Connect(function()
-                    if ImmortalEnabled and humanoid.Health < humanoid.MaxHealth then
-                        humanoid.Health = humanoid.MaxHealth
-                    end
-                end)
-            end
-            
-            -- Método 2: Proteger partes do corpo
-            for _, part in pairs(character:GetChildren()) do
-                if part:IsA("BasePart") then
-                    part.CanCollide = false
-                end
-            end
-        end
-        
-        -- Proteger personagem atual
-        if LP.Character then
-            protectCharacter(LP.Character)
-        end
-        
-        -- Proteger futuros personagens
-        LP.CharacterAdded:Connect(protectCharacter)
-        
-        Notify("🛡️ Imortal Ativado!")
-    else
-        -- Restaurar colisão
-        if LP.Character then
-            for _, part in pairs(LP.Character:GetChildren()) do
-                if part:IsA("BasePart") then
-                    part.CanCollide = true
-                end
-            end
-        end
-        Notify("🛡️ Imortal Desativado!")
-    end
-end
-
--- ===== FUNÇÃO INVISÍVEL =====
-local function SetInvisible(enabled)
-    InvisibleEnabled = enabled
-    
-    local function toggleInvisibility(character)
-        if not character then return end
-        
-        for _, part in pairs(character:GetChildren()) do
-            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                part.Transparency = enabled and 1 or 0
-            end
-        end
-        
-        -- Tornar HumanoidRootPart ligeiramente visível para não bugar
-        local root = character:FindFirstChild("HumanoidRootPart")
-        if root then
-            root.Transparency = enabled and 0.9 or 0
-        end
-        
-        -- Esconder acessórios
-        for _, child in pairs(character:GetDescendants()) do
-            if child:IsA("BasePart") and child.Parent and child.Parent:IsA("Accessory") then
-                child.Transparency = enabled and 1 or 0
-            end
-        end
-        
-        -- Esconder nome
-        local head = character:FindFirstChild("Head")
-        if head then
-            local billboard = head:FindFirstChild("BillboardGui")
-            if billboard then
-                billboard.Enabled = not enabled
-            end
-        end
-    end
-    
-    if enabled then
-        if LP.Character then
-            toggleInvisibility(LP.Character)
-        end
-        
-        LP.CharacterAdded:Connect(function(char)
-            task.wait(0.1)
-            toggleInvisibility(char)
-        end)
-        
-        Notify("👻 Invisível Ativado!")
-    else
-        if LP.Character then
-            toggleInvisibility(LP.Character)
-        end
-        Notify("👻 Invisível Desativado!")
-    end
-end
 
 -- Função para verificar inimigos
 local function IsEnemy(player)
@@ -162,6 +59,28 @@ local function IsEnemy(player)
     if not humanoid or humanoid.Health <= 0 then return false end
     
     return true
+end
+
+-- Função para criar/atualizar FOV Circle
+local function UpdateFOVVisibility()
+    if FOVCircle then
+        -- Se o aimbot estiver ativo E FOVVisible for true, mostra
+        -- Se o aimbot estiver ativo E FOVVisible for false, esconde mas continua funcionando
+        FOVCircle.Visible = AimbotEnabled and FOVVisible
+        
+        -- Se quiser esconder mas manter uma referência visual mínima (opcional)
+        if AimbotEnabled and not FOVVisible then
+            FOVCircle.BackgroundTransparency = 1
+            if FOVCircle:FindFirstChild("UIStroke") then
+                FOVCircle.UIStroke.Transparency = 1
+            end
+        else
+            FOVCircle.BackgroundTransparency = 1
+            if FOVCircle:FindFirstChild("UIStroke") then
+                FOVCircle.UIStroke.Transparency = 0
+            end
+        end
+    end
 end
 
 -- Função para pegar inimigo mais próximo
@@ -324,7 +243,7 @@ print("✅ BOTÃO CRIADO")
 
 -- ===== MENU PRINCIPAL =====
 local Main = Instance.new("Frame")
-Main.Size = UDim2.new(0.92, 0, 0.75, 0)
+Main.Size = UDim2.new(0.92, 0, 0.7, 0)
 Main.Position = UDim2.new(0.5, 0, 0.5, 0)
 Main.AnchorPoint = Vector2.new(0.5, 0.5)
 Main.BackgroundColor3 = Color3.fromRGB(18, 18, 32)
@@ -438,7 +357,7 @@ TabContents["Combate"].Frame.Visible = true
 
 print("✅ ABAS CRIADAS")
 
--- Funções dos componentes
+-- Componentes UI
 local function GetScroll(tabName)
     return TabContents[tabName].Frame
 end
@@ -450,7 +369,7 @@ local function AddSection(tabName, title)
     sec.ZIndex = 81
     sec.Parent = GetScroll(tabName)
     
-    local label = Instance.new("TextLabel")
+    local label = Instance.new("TextLabel", sec)
     label.Size = UDim2.new(1, 0, 1, 0)
     label.BackgroundTransparency = 1
     label.Text = title
@@ -459,15 +378,13 @@ local function AddSection(tabName, title)
     label.TextSize = 12
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.ZIndex = 82
-    label.Parent = sec
     
-    local line = Instance.new("Frame")
+    local line = Instance.new("Frame", sec)
     line.Size = UDim2.new(1, 0, 0, 1)
     line.Position = UDim2.new(0, 0, 1, 0)
     line.BackgroundColor3 = Color3.fromRGB(45, 45, 75)
     line.BorderSizePixel = 0
     line.ZIndex = 81
-    line.Parent = sec
 end
 
 local function AddToggle(tabName, text, default, callback)
@@ -479,7 +396,7 @@ local function AddToggle(tabName, text, default, callback)
     frame.Parent = GetScroll(tabName)
     Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
     
-    local label = Instance.new("TextLabel")
+    local label = Instance.new("TextLabel", frame)
     label.Size = UDim2.new(0.65, 0, 1, 0)
     label.Position = UDim2.new(0.05, 0, 0, 0)
     label.BackgroundTransparency = 1
@@ -489,9 +406,8 @@ local function AddToggle(tabName, text, default, callback)
     label.TextSize = 13
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.ZIndex = 82
-    label.Parent = frame
     
-    local btn = Instance.new("TextButton")
+    local btn = Instance.new("TextButton", frame)
     btn.Size = UDim2.new(0, 46, 0, 22)
     btn.Position = UDim2.new(1, -54, 0.5, -11)
     btn.BackgroundColor3 = default and Color3.fromRGB(80, 130, 255) or Color3.fromRGB(55, 55, 80)
@@ -499,16 +415,14 @@ local function AddToggle(tabName, text, default, callback)
     btn.BorderSizePixel = 0
     btn.Active = true
     btn.ZIndex = 82
-    btn.Parent = frame
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 11)
     
-    local knob = Instance.new("Frame")
+    local knob = Instance.new("Frame", btn)
     knob.Size = UDim2.new(0, 18, 0, 18)
     knob.Position = default and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 2, 0.5, -9)
     knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     knob.BorderSizePixel = 0
     knob.ZIndex = 83
-    knob.Parent = btn
     Instance.new("UICorner", knob).CornerRadius = UDim.new(0, 9)
     
     local enabled = default
@@ -534,7 +448,7 @@ local function AddButton(tabName, text, color, callback)
     frame.Parent = GetScroll(tabName)
     Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
     
-    local btn = Instance.new("TextButton")
+    local btn = Instance.new("TextButton", frame)
     btn.Size = UDim2.new(0.9, 0, 0, 30)
     btn.Position = UDim2.new(0.5, 0, 0.5, 0)
     btn.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -545,7 +459,6 @@ local function AddButton(tabName, text, color, callback)
     btn.TextSize = 13
     btn.BorderSizePixel = 0
     btn.ZIndex = 82
-    btn.Parent = frame
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 7)
     
     btn.MouseButton1Click:Connect(function()
@@ -565,7 +478,7 @@ local function AddSlider(tabName, text, min, max, default, callback)
     frame.Parent = GetScroll(tabName)
     Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
     
-    local label = Instance.new("TextLabel")
+    local label = Instance.new("TextLabel", frame)
     label.Size = UDim2.new(0.5, 0, 0, 18)
     label.Position = UDim2.new(0.05, 0, 0, 5)
     label.BackgroundTransparency = 1
@@ -575,9 +488,8 @@ local function AddSlider(tabName, text, min, max, default, callback)
     label.TextSize = 12
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.ZIndex = 82
-    label.Parent = frame
     
-    local valLabel = Instance.new("TextLabel")
+    local valLabel = Instance.new("TextLabel", frame)
     valLabel.Size = UDim2.new(0.25, 0, 0, 18)
     valLabel.Position = UDim2.new(0.7, 0, 0, 5)
     valLabel.BackgroundTransparency = 1
@@ -587,35 +499,31 @@ local function AddSlider(tabName, text, min, max, default, callback)
     valLabel.TextSize = 12
     valLabel.TextXAlignment = Enum.TextXAlignment.Right
     valLabel.ZIndex = 82
-    valLabel.Parent = frame
     
-    local bg = Instance.new("Frame")
+    local bg = Instance.new("Frame", frame)
     bg.Size = UDim2.new(0.9, 0, 0, 4)
     bg.Position = UDim2.new(0.05, 0, 0, 35)
     bg.BackgroundColor3 = Color3.fromRGB(50, 50, 75)
     bg.BorderSizePixel = 0
     bg.Active = true
     bg.ZIndex = 82
-    bg.Parent = frame
     Instance.new("UICorner", bg).CornerRadius = UDim.new(0, 2)
     
-    local fill = Instance.new("Frame")
+    local fill = Instance.new("Frame", bg)
     local pct = (default - min) / (max - min)
     fill.Size = UDim2.new(pct, 0, 1, 0)
     fill.BackgroundColor3 = Color3.fromRGB(80, 130, 255)
     fill.BorderSizePixel = 0
     fill.ZIndex = 83
-    fill.Parent = bg
     Instance.new("UICorner", fill).CornerRadius = UDim.new(0, 2)
     
-    local thumb = Instance.new("TextButton")
+    local thumb = Instance.new("TextButton", bg)
     thumb.Size = UDim2.new(0, 18, 0, 18)
     thumb.Position = UDim2.new(pct, -9, 0.5, -9)
     thumb.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     thumb.Text = ""
     thumb.BorderSizePixel = 0
     thumb.ZIndex = 84
-    thumb.Parent = bg
     Instance.new("UICorner", thumb).CornerRadius = UDim.new(0, 9)
     
     local dragging = false
@@ -653,14 +561,14 @@ end
 
 local function AddDropdown(tabName, text, options, default, callback)
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0.92, 0, 0, 75)
+    frame.Size = UDim2.new(0.92, 0, 0, 65)
     frame.BackgroundColor3 = Color3.fromRGB(28, 28, 48)
     frame.BorderSizePixel = 0
     frame.ZIndex = 81
     frame.Parent = GetScroll(tabName)
     Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
     
-    local label = Instance.new("TextLabel")
+    local label = Instance.new("TextLabel", frame)
     label.Size = UDim2.new(1, -10, 0, 20)
     label.Position = UDim2.new(0, 5, 0, 5)
     label.BackgroundTransparency = 1
@@ -670,12 +578,9 @@ local function AddDropdown(tabName, text, options, default, callback)
     label.TextSize = 12
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.ZIndex = 82
-    label.Parent = frame
-    
-    local buttons = {}
     
     for i, opt in pairs(options) do
-        local btn = Instance.new("TextButton")
+        local btn = Instance.new("TextButton", frame)
         btn.Size = UDim2.new(0.3, 0, 0, 28)
         btn.Position = UDim2.new(0.03 + ((i-1) * 0.32), 0, 0, 30)
         btn.BackgroundColor3 = opt == default and Color3.fromRGB(80, 130, 255) or Color3.fromRGB(50, 50, 70)
@@ -685,31 +590,30 @@ local function AddDropdown(tabName, text, options, default, callback)
         btn.TextSize = 10
         btn.BorderSizePixel = 0
         btn.ZIndex = 82
-        btn.Parent = frame
         Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
         
         btn.MouseButton1Click:Connect(function()
-            for _, b in pairs(buttons) do
-                b.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+            for _, child in pairs(frame:GetChildren()) do
+                if child:IsA("TextButton") then
+                    child.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+                end
             end
             btn.BackgroundColor3 = Color3.fromRGB(80, 130, 255)
             callback(opt)
         end)
-        
-        table.insert(buttons, btn)
     end
 end
 
 local function AddColorPicker(tabName, text, default, callback)
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0.92, 0, 0, 70)
+    frame.Size = UDim2.new(0.92, 0, 0, 65)
     frame.BackgroundColor3 = Color3.fromRGB(28, 28, 48)
     frame.BorderSizePixel = 0
     frame.ZIndex = 81
     frame.Parent = GetScroll(tabName)
     Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
     
-    local label = Instance.new("TextLabel")
+    local label = Instance.new("TextLabel", frame)
     label.Size = UDim2.new(1, -10, 0, 20)
     label.Position = UDim2.new(0, 5, 0, 5)
     label.BackgroundTransparency = 1
@@ -719,37 +623,35 @@ local function AddColorPicker(tabName, text, default, callback)
     label.TextSize = 12
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.ZIndex = 82
-    label.Parent = frame
     
     local colors = {
-        {color = Color3.fromRGB(255, 80, 80)},
-        {color = Color3.fromRGB(80, 130, 255)},
-        {color = Color3.fromRGB(80, 255, 100)},
-        {color = Color3.fromRGB(255, 255, 80)},
-        {color = Color3.fromRGB(180, 80, 255)},
-        {color = Color3.fromRGB(255, 255, 255)},
+        Color3.fromRGB(255, 80, 80),
+        Color3.fromRGB(80, 130, 255),
+        Color3.fromRGB(80, 255, 100),
+        Color3.fromRGB(255, 255, 80),
+        Color3.fromRGB(180, 80, 255),
+        Color3.fromRGB(255, 255, 255),
     }
     
-    for i, c in pairs(colors) do
-        local btn = Instance.new("TextButton")
+    for i, color in pairs(colors) do
+        local btn = Instance.new("TextButton", frame)
         btn.Size = UDim2.new(0, 22, 0, 22)
-        btn.Position = UDim2.new(0.05 + ((i-1) * 0.15), 0, 0, 35)
-        btn.BackgroundColor3 = c.color
+        btn.Position = UDim2.new(0.05 + ((i-1) * 0.15), 0, 0, 33)
+        btn.BackgroundColor3 = color
         btn.Text = ""
         btn.BorderSizePixel = 0
         btn.ZIndex = 82
-        btn.Parent = frame
         Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 11)
         
         local stroke = Instance.new("UIStroke", btn)
-        stroke.Color = c.color == default and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(40, 40, 60)
+        stroke.Color = color == default and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(40, 40, 60)
         stroke.Thickness = 2
         
         btn.MouseButton1Click:Connect(function()
-            callback(c.color)
+            callback(color)
             for _, child in pairs(frame:GetChildren()) do
                 if child:IsA("TextButton") and child:FindFirstChild("UIStroke") then
-                    child.UIStroke.Color = child.BackgroundColor3 == c.color and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(40, 40, 60)
+                    child.UIStroke.Color = child.BackgroundColor3 == color and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(40, 40, 60)
                 end
             end
         end)
@@ -786,13 +688,89 @@ AddToggle("Combate", "Aimbot (Apenas Inimigos)", false, function(val)
             Instance.new("UIStroke", FOVCircle).Color = FOVColor
             Instance.new("UICorner", FOVCircle).CornerRadius = UDim.new(1, 0)
         end
-        FOVCircle.Visible = true
+        UpdateFOVVisibility()
     else
         Notify("🎯 Aimbot Desativado")
-        if FOVCircle then FOVCircle.Visible = false end
+        UpdateFOVVisibility()
     end
+end)
+
+-- NOVA OPÇÃO: Esconder FOV
+AddToggle("Combate", "👁 Esconder FOV (Funciona Oculto)", false, function(val)
+    FOVVisible = not val -- Inverte porque o toggle diz "Esconder"
+    if val then
+        Notify("👁 FOV Escondido (Aimbot funcionando)")
+    else
+        Notify("👁 FOV Visível")
+    end
+    UpdateFOVVisibility()
 end)
 
 AddSection("Combate", "⚡ MOVIMENTO")
 
 AddButton("Combate", "🏃 IR ATÉ O INIMIGO", Color3.fromRGB(60, 140, 60), function()
+    TeleportToTarget()
+end)
+
+AddButton("Combate", "🧲 PUXAR INIMIGO", Color3.fromRGB(140, 60, 140), function()
+    PullTarget()
+end)
+
+AddPadding("Combate")
+
+-- ============ ABA VISUAL ============
+AddSection("Visual", "👁 ESP")
+
+AddToggle("Visual", "ESP (Ativar/Desativar)", false, function(val)
+    ESPEnabled = val
+    if val then
+        Notify("👁 ESP Ativado")
+    else
+        Notify("👁 ESP Desativado")
+        for _, obj in pairs(ESPObjects) do
+            if obj and obj.Frame then obj.Frame:Destroy() end
+        end
+        ESPObjects = {}
+    end
+end)
+
+AddSection("Visual", "📦 ELEMENTOS")
+
+AddToggle("Visual", "Caixa (Box ESP)", true, function(val)
+    ESPBox = val
+    for _, data in pairs(ESPObjects) do
+        if data.Box then data.Box.Visible = val end
+    end
+end)
+
+AddToggle("Visual", "Nome do Jogador", true, function(val)
+    ESPName = val
+    for _, data in pairs(ESPObjects) do
+        if data.NameTag then data.NameTag.Visible = val end
+    end
+end)
+
+AddToggle("Visual", "Distância", true, function(val)
+    ESPDistance = val
+    for _, data in pairs(ESPObjects) do
+        if data.DistTag then data.DistTag.Visible = val end
+    end
+end)
+
+AddToggle("Visual", "Linha (Tracer)", true, function(val)
+    ESPTracer = val
+    for _, data in pairs(ESPObjects) do
+        if data.Tracer then data.Tracer.Visible = val end
+    end
+end)
+
+AddSection("Visual", "🎨 CORES")
+
+AddColorPicker("Visual", "Cor do ESP", ESPColor, function(color)
+    ESPColor = color
+    for _, data in pairs(ESPObjects) do
+        if data.Box and data.Box:FindFirstChild("UIStroke") then data.Box.UIStroke.Color = color end
+        if data.NameTag then data.NameTag.TextColor3 = color end
+        if data.DistTag then data.DistTag.TextColor3 = color end
+        if data.Tracer then data.Tracer.BackgroundColor3 = color end
+    end
